@@ -31,7 +31,7 @@ class TelegramBot(
         return BOT_TOKEN
     }
 
-    override fun getBotUsername(): String {
+    override fun getBotUsername(): String? {
         return BOT_NAME
     }
 
@@ -48,6 +48,5 @@ class TelegramBot(
                 execute(response)
             }
         }
-        println(update)
     }
 }

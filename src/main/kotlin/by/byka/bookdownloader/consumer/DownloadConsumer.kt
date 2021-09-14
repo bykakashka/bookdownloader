@@ -1,5 +1,7 @@
-package by.byka.bookdownloader
+package by.byka.bookdownloader.consumer
 
+import by.byka.bookdownloader.DownloadService
+import by.byka.bookdownloader.TelegramBot
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.springframework.kafka.annotation.EnableKafka
 import org.springframework.kafka.annotation.KafkaListener
@@ -7,35 +9,25 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 @EnableKafka
 @Service
-class DownloadConsumer(private val kafkaTemplate: KafkaTemplate<String, String>, private val telegramBot: TelegramBot) {
-    var PATH = "E://img/"
-
-    fun download(link: String): String {
-        val conn = URL(link).openConnection()
-
-        val filename = "TODO get from link"
-        if (conn is HttpURLConnection) {
-            conn.getInputStream().use { input ->
-                FileOutputStream(File(PATH + filename)).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        }
-        return PATH + filename
-    }
+class DownloadConsumer(
+    private val kafkaTemplate: KafkaTemplate<String, String>,
+    private val telegramBot: TelegramBot,
+    private val downloadService: DownloadService
+) {
 
     @KafkaListener(topics = ["download"])
     fun listener(record: ConsumerRecord<String, String>) {
         try {
-            val filePath = download(record.value())
-            kafkaTemplate.send("sendEmail", record.key(), filePath)
-            sendInfo(record.key())
+            val filePath = downloadService.download(record.value())
+            sendInfo(record.key(), filePath.substringAfterLast(File.separator))
+            if (filePath.endsWith(".mobi")) {
+                kafkaTemplate.send("sendEmail", record.key(), filePath)
+            } else {
+                kafkaTemplate.send("convert", record.key(), filePath)
+            }
         } catch (e: Exception) {
             sendException(record.key(), e.message.toString())
         }
@@ -48,10 +40,10 @@ class DownloadConsumer(private val kafkaTemplate: KafkaTemplate<String, String>,
         telegramBot.execute(infoMessage)
     }
 
-    fun sendInfo(chatId: String) {
+    fun sendInfo(chatId: String, filename: String) {
         val infoMessage = SendMessage()
         infoMessage.chatId = chatId
-        infoMessage.text = "Downloaded"
+        infoMessage.text = "$filename downloaded"
         telegramBot.execute(infoMessage)
     }
 }

@@ -19,6 +19,7 @@ dependencies {
     implementation("org.apache.commons:commons-lang3:3.0")
     implementation("org.telegram:telegrambots:5.3.0")
     implementation("org.telegram:telegrambotsextensions:5.3.0")
+    implementation("org.springframework:spring-web:5.3.9")
 
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.jetbrains.kotlin:kotlin-reflect")

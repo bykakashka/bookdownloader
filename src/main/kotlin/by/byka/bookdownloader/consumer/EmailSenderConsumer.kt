@@ -1,12 +1,15 @@
-package by.byka.bookdownloader
+package by.byka.bookdownloader.consumer
 
 import by.byka.bookdownloader.Constants.EMAIL
 import by.byka.bookdownloader.Constants.PWD
+import by.byka.bookdownloader.TelegramBot
+import by.byka.bookdownloader.UserService
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.springframework.kafka.annotation.EnableKafka
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Service
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import java.io.File
 import java.util.*
 import javax.activation.DataHandler
 import javax.activation.FileDataSource
@@ -80,7 +83,7 @@ class EmailSenderConsumer(private val userService: UserService, private val tele
     }
 
     private fun getFilenameFromPath(path: String): String {
-        return "test.jpeg"
+        return path.substringAfterLast(File.separator)
     }
 
     fun sendInfo(chatId: String) {
