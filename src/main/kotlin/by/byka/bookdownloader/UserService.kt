@@ -1,25 +1,54 @@
 package by.byka.bookdownloader
 
 import by.byka.bookdownloader.entity.User
-import org.springframework.stereotype.Service
+import by.byka.bookdownloader.service.EmailSenderService
+import by.byka.bookdownloader.table.UserTable
+import org.apache.commons.lang3.RandomStringUtils
+import org.apache.logging.log4j.LogManager
+import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 
-@Service
-class UserService {
-    private val db = HashMap<String, User>()
 
-    fun getUserEmailByChatId(chatId: String) : String? {
-        return db[chatId]?.email
+class UserService(
+    private val database: Database,
+    private val emailSenderService: EmailSenderService
+) {
+    private val log = LogManager.getLogger(UserService::class.java)
+
+    fun getUserByChatId(chatId: Long): User? {
+        return serializableTransaction(database) {
+            User.findById(chatId)
+        }
     }
 
-    fun isEmailExist(chatId: String): Boolean {
-        return db.containsKey(chatId)
+    fun updateUserEmail(chatId: Long, newEmail: String) {
+        val randomCode =  RandomStringUtils.randomAlphanumeric(5)
+        transaction(database) {
+            val user = User.findById(chatId)
+            if (user != null) {
+                UserTable.update({ UserTable.id eq chatId }) {
+                    it[email] = newEmail
+                    it[code] = randomCode
+                    it[activated] = false
+                }
+            } else {
+                User.new(chatId) {
+                    email = newEmail
+                    code = randomCode
+                }
+            }
+        }
+
+        emailSenderService.sendCode(chatId, randomCode, newEmail)
     }
 
-    fun updateUserInfo(id: Long, chatId: String, email: String) {
-        val user = db.getOrDefault(chatId, User())
-        user.email = email
-        user.chatId = chatId
-        user.id = id
-        db[chatId] = user
+    fun activateUser(id: EntityID<Long>) {
+        transaction(database) {
+            UserTable.update({ UserTable.id eq id }) {
+                it[activated] = true
+            }
+        }
     }
 }

@@ -1,13 +1,9 @@
-package by.byka.bookdownloader.consumer
+package by.byka.bookdownloader.service
 
 import by.byka.bookdownloader.Constants.EMAIL
 import by.byka.bookdownloader.Constants.PWD
-import by.byka.bookdownloader.TelegramBot
 import by.byka.bookdownloader.UserService
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.springframework.kafka.annotation.EnableKafka
-import org.springframework.kafka.annotation.KafkaListener
-import org.springframework.stereotype.Service
+import org.apache.logging.log4j.LogManager
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import java.io.File
 import java.util.*
@@ -21,30 +17,60 @@ import javax.mail.internet.MimeBodyPart
 import javax.mail.internet.MimeMessage
 import javax.mail.internet.MimeMultipart
 
-@EnableKafka
-@Service
-class EmailSenderConsumer(private val userService: UserService, private val telegramBot: TelegramBot) {
-    @KafkaListener(topics = ["sendEmail"])
-    fun sendEmail(record: ConsumerRecord<String, String>) {
-        val filePath = record.value()
-        val props = initProperties()
+class EmailSenderService {
 
+    private val log = LogManager.getLogger(EmailSenderService::class.java)
+
+    fun sendCode(chatId: Long, code: String, userEmail: String): SendMessage {
+        log.trace("Start sending code by email")
+
+        val props = initProperties()
         val session = Session.getDefaultInstance(props, object : javax.mail.Authenticator() {
             override fun getPasswordAuthentication(): javax.mail.PasswordAuthentication {
                 return javax.mail.PasswordAuthentication(EMAIL, PWD)
             }
         })
 
-        try {
-            val mimeMessage = initMessage(session, userService.getUserEmailByChatId(record.key()) ?: "", filePath)
+        return try {
+            val mimeMessage = MimeMessage(session)
+            mimeMessage.setText(code)
+            mimeMessage.setFrom(InternetAddress(EMAIL))
+            mimeMessage.setRecipients(Message.RecipientType.TO, InternetAddress.parse(userEmail, false))
+            mimeMessage.sentDate = Date()
+
             val smtpTransport = session.getTransport("smtp")
             smtpTransport.connect()
             smtpTransport.sendMessage(mimeMessage, mimeMessage.allRecipients)
             smtpTransport.close()
-            sendInfo(record.key())
+            log.info("Email had been send successful")
+            sendInfo(chatId.toString())
         } catch (messagingException: MessagingException) {
-            sendExceptionMessage(record.key(), messagingException.message.toString())
-            messagingException.printStackTrace()
+            log.warn("Cannot send email: ${messagingException.message}", messagingException)
+            sendExceptionMessage(chatId.toString(), messagingException.message.toString())
+        }
+    }
+
+    fun sendFile(chatId: Long, filePath: String, userEmail: String): SendMessage {
+        log.trace("Start sending file by email")
+
+        val props = initProperties()
+        val session = Session.getDefaultInstance(props, object : javax.mail.Authenticator() {
+            override fun getPasswordAuthentication(): javax.mail.PasswordAuthentication {
+                return javax.mail.PasswordAuthentication(EMAIL, PWD)
+            }
+        })
+
+        return try {
+            val mimeMessage = initMessage(session, userEmail, filePath)
+            val smtpTransport = session.getTransport("smtp")
+            smtpTransport.connect()
+            smtpTransport.sendMessage(mimeMessage, mimeMessage.allRecipients)
+            smtpTransport.close()
+            log.info("Email had been send successful")
+            sendInfo(chatId.toString())
+        } catch (messagingException: MessagingException) {
+            log.warn("Cannot send email: ${messagingException.message}", messagingException)
+            sendExceptionMessage(chatId.toString(), messagingException.message.toString())
         }
     }
 
@@ -86,17 +112,17 @@ class EmailSenderConsumer(private val userService: UserService, private val tele
         return path.substringAfterLast(File.separator)
     }
 
-    fun sendInfo(chatId: String) {
+    private fun sendInfo(chatId: String): SendMessage {
         val infoMessage = SendMessage()
         infoMessage.chatId = chatId
         infoMessage.text = "Book send by email"
-        telegramBot.execute(infoMessage)
+        return infoMessage
     }
 
-    fun sendExceptionMessage(chatId: String, message: String) {
+    private fun sendExceptionMessage(chatId: String, message: String): SendMessage {
         val infoMessage = SendMessage()
         infoMessage.chatId = chatId
         infoMessage.text = "Error in the email sender: \n $message"
-        telegramBot.execute(infoMessage)
+        return infoMessage
     }
 }

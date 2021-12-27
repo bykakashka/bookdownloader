@@ -1,22 +1,10 @@
 package by.byka.bookdownloader.converter.data
 
-class InitRequestDto() {
-    var input: Array<TypeSourceDto>? = null
-    var conversion: Array<TargetDto>? = null
+import com.fasterxml.jackson.annotation.JsonProperty
 
-    constructor(
-        input: Array<TypeSourceDto>?,
-        conversion: Array<TargetDto>?) : this(){
-        this.input = input
-        this.conversion = conversion
-    }
+data class InitRequestDto(@JsonProperty("conversion") val conversion: List<TargetDto>) {
+    data class TargetDto(
+        @JsonProperty("target")
+        val target: String
+    )
 }
-
-class TypeSourceDto(
-    var type: String,
-    var source: String
-)
-
-class TargetDto(
-    var target: String
-)

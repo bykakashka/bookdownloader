@@ -1,11 +1,5 @@
 package by.byka.bookdownloader.converter.data
 
-class InitResponseDto() {
-    var id: String? = null
-    var server: String? = null
+import com.fasterxml.jackson.annotation.JsonProperty
 
-    constructor(id: String, server: String) : this() {
-        this.id = id
-        this.server = server
-    }
-}
+data class InitResponseDto(@JsonProperty("id") val id: String, @JsonProperty("server") val server: String)

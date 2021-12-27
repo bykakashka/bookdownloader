@@ -2,80 +2,85 @@ package by.byka.bookdownloader.converter.service
 
 import by.byka.bookdownloader.Constants.CONVERTER_TOKEN
 import by.byka.bookdownloader.Constants.CONVERTER_URL
-import by.byka.bookdownloader.DownloadService
-import by.byka.bookdownloader.converter.data.*
-import by.byka.bookdownloader.data.ConvertStatus
-import by.byka.bookdownloader.data.ConverterResult
-import org.springframework.boot.web.client.RestTemplateBuilder
-import org.springframework.core.io.FileSystemResource
-import org.springframework.http.HttpEntity
-import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
-import org.springframework.util.LinkedMultiValueMap
-import org.springframework.util.MultiValueMap
-import java.net.URI
+import by.byka.bookdownloader.converter.data.InitRequestDto
+import by.byka.bookdownloader.converter.data.InitResponseDto
+import by.byka.bookdownloader.converter.data.SendFileResponseDto
+import by.byka.bookdownloader.jacksonMapper
+import by.byka.bookdownloader.retrofit.SendFileClient
+import by.byka.bookdownloader.retrofit.StatusResponseClient
+import by.byka.bookdownloader.service.DownloadService
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.asRequestBody
+import org.apache.logging.log4j.LogManager
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.jackson.JacksonConverterFactory
+import java.io.File
 
-@Service
 class ConverterService(
-    private val downloadService: DownloadService
+    private val downloadService: DownloadService,
+    private val httpClient: OkHttpClient
 ) {
-    val HEADER_NAME : String = "X-Oc-Api-Key"
+    private val log = LogManager.getLogger(ConverterService::class.java)
 
-    fun convert(filepath: String): ConverterResult {
-        val initResp = initUpload()
-        val uploadResp = sendFile(initResp, filepath)
-        return getConvertedUrl(uploadResp.body)
+    private val converterRetrofitClient = Retrofit.Builder()
+        .baseUrl(CONVERTER_URL)
+        .client(httpClient)
+        .addConverterFactory(JacksonConverterFactory.create(jacksonMapper()))
+        .build().create(StatusResponseClient::class.java)
+
+    fun convert(filepath: String): String? {
+        log.trace("Init conversion for file $filepath")
+
+        val resp = converterRetrofitClient.initUpload(
+            CONVERTER_TOKEN,
+            InitRequestDto(listOf(InitRequestDto.TargetDto("mobi")))
+        ).execute()
+        resp.body()?.let {
+            val uploadResp = sendFile(it, filepath)
+            uploadResp.body()?.let {body ->
+                return getConvertedUrl(body)
+            }
+            uploadResp.errorBody()?.let { body ->
+                log.warn("Cannot get converted file url: ${body.string()}")
+            }
+        }
+        log.warn("Null body for init upload request")
+        return null
     }
 
-    private fun getConvertedUrl(uploadResp: SendFileResponseDto): ConverterResult {
-        // TODO validate code before getting body
-        val statusResp = checkStatus(uploadResp).body
-        return if (statusResp.status?.code.equals("completed")) {
-            ConverterResult(downloadService.download(statusResp.output[0].uri))
-        } else if (statusResp.status?.code.equals("processing")) {
-            Thread.sleep(10000)
-            getConvertedUrl(uploadResp)
-        } else {
-            ConverterResult("Unexpected job status ${statusResp.status?.code}", ConvertStatus.ERROR)
+    private fun getConvertedUrl(uploadResp: SendFileResponseDto): String? {
+        val resp = converterRetrofitClient.getStatus(CONVERTER_TOKEN, uploadResp.id.job).execute()
+        val statusResp = resp.body()
+        return when (statusResp?.status?.code) {
+            "completed" -> {
+                log.info("Converted file downloaded")
+                downloadService.download(statusResp.output[0].uri)
+            }
+            "processing" -> {
+                Thread.sleep(10000)
+                getConvertedUrl(uploadResp)
+            }
+            else -> {
+                if (statusResp == null) {
+                    log.warn("Exception in the job status request: ${resp.code()} - ${resp.errorBody()}")
+                }
+                null
+            }
         }
     }
 
-    private fun checkStatus(uploadResp: SendFileResponseDto): ResponseEntity<StatusResponseDto> {
-        val restTemplate = RestTemplateBuilder()
-            .defaultHeader(HEADER_NAME, CONVERTER_TOKEN)
-            .build()
-        val statusResp = restTemplate.getForEntity(CONVERTER_URL + "/" + uploadResp.id?.job, StatusResponseDto::class.java)
-        return statusResp
-    }
+    private fun sendFile(
+        initResp: InitResponseDto,
+        filepath: String
+    ): Response<SendFileResponseDto> {
+        val sendFileRetrofit = Retrofit.Builder().baseUrl(initResp.server + "/").client(httpClient)
+            .addConverterFactory(JacksonConverterFactory.create(jacksonMapper())).build()
+            .create(SendFileClient::class.java)
+        val file = File(filepath)
 
-    private fun sendFile(initResp: ResponseEntity<InitResponseDto>, filepath: String): ResponseEntity<SendFileResponseDto> {
-        val body: MultiValueMap<String, FileSystemResource> = LinkedMultiValueMap()
-        body.add("file", FileSystemResource(filepath))
-        val httpEntity = HttpEntity(body)
-
-        val restTemplate = RestTemplateBuilder()
-            .defaultHeader(HEADER_NAME, CONVERTER_TOKEN)
-            .defaultHeader("Content-Type", "multipart/form-data")
-            .build()
-
-        val resp = restTemplate.postForEntity(
-            initResp.body.server + "/upload-file/" + initResp.body.id,
-            httpEntity,
-            SendFileResponseDto::class.java
-        )
-        return resp
-    }
-
-    private fun initUpload(): ResponseEntity<InitResponseDto> {
-        val restTemplate = RestTemplateBuilder()
-            .defaultHeader(HEADER_NAME, CONVERTER_TOKEN)
-            .build()
-        val resp = restTemplate.postForEntity(
-            URI(CONVERTER_URL),
-            InitRequestDto(input = null, conversion = arrayOf(TargetDto("mobi"))),
-            InitResponseDto::class.java
-        )
-
-        return resp
+        val filePart = MultipartBody.Part.createFormData("file", file.name, File(filepath).asRequestBody())
+        return sendFileRetrofit.upload(CONVERTER_TOKEN, initResp.id, filePart).execute()
     }
 }
