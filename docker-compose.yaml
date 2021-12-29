@@ -9,6 +9,7 @@ services:
     environment:
       - HOME_FOLDER=./tmp
       - DB_HOST=db
+    restart: always
   db:
     image: postgres:13.3
     restart: always

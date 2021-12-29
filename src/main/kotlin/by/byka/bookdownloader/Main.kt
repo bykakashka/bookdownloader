@@ -4,6 +4,7 @@ import by.byka.bookdownloader.Constants.DB_HOST
 import by.byka.bookdownloader.Constants.DB_NAME
 import by.byka.bookdownloader.Constants.DB_PWD
 import by.byka.bookdownloader.Constants.DB_USER
+import by.byka.bookdownloader.Constants.HOME_FOLDER
 import by.byka.bookdownloader.converter.service.ConverterService
 import by.byka.bookdownloader.service.DownloadService
 import by.byka.bookdownloader.service.EmailSenderService
@@ -16,6 +17,7 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.io.File
 import java.sql.Connection
 import java.util.concurrent.TimeUnit
 
@@ -54,9 +56,12 @@ class Main {
             val downloadService = DownloadService(httpClient)
             val convertService = ConverterService(downloadService, httpClient)
 
+            val fileDirs = File(HOME_FOLDER)
+            if (!fileDirs.exists()) {
+                fileDirs.mkdir()
+            }
+
             TelegramBot(userService, emailSenderService, downloadService, convertService)
         }
     }
 }
-
-// https://github.com/JetBrains/Exposed
