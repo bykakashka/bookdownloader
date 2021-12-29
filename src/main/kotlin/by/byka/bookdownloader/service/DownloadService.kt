@@ -1,6 +1,7 @@
 package by.byka.bookdownloader.service
 
 import by.byka.bookdownloader.Constants.BOT_TOKEN
+import by.byka.bookdownloader.Constants.HOME_FOLDER
 import by.byka.bookdownloader.jacksonMapper
 import by.byka.bookdownloader.retrofit.TgApiClient
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -15,9 +16,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-//const val PATH = "./tmp"
-const val HOME_FOLDER = "E:\\img"
-
 class DownloadService(httpClient: OkHttpClient) {
 
     private val log = LogManager.getLogger(DownloadService::class.java)
@@ -30,6 +28,11 @@ class DownloadService(httpClient: OkHttpClient) {
 
 
     fun download(link: String): String {
+
+        val dir = File(HOME_FOLDER)
+        if (!dir.exists()) {
+            dir.mkdir()
+        }
 
         val conn = URL(link).openConnection()
         val contentHeader = conn.getHeaderField("content-disposition")

@@ -11,4 +11,5 @@ object Constants {
     val DB_PWD: String = System.getenv("POSTGRES_PASSWORD")
     val DB_USER: String = System.getenv("POSTGRES_USER")
     val DB_HOST: String = System.getenv("DB_HOST")
+    val HOME_FOLDER: String = System.getenv("HOME_FOLDER")
 }
