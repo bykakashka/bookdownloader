@@ -56,12 +56,16 @@ class Main {
             val downloadService = DownloadService(httpClient)
             val convertService = ConverterService(downloadService, httpClient)
 
+            initFolder()
+
+            TelegramBot(userService, emailSenderService, downloadService, convertService)
+        }
+
+        private fun initFolder() {
             val fileDirs = File(HOME_FOLDER)
             if (!fileDirs.exists()) {
                 fileDirs.mkdir()
             }
-
-            TelegramBot(userService, emailSenderService, downloadService, convertService)
         }
     }
 }
