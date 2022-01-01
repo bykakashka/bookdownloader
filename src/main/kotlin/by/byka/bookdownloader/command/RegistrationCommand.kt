@@ -21,7 +21,7 @@ class RegistrationCommand(private val userService: UserService) : IBotCommand {
 
     override fun processMessage(absSender: AbsSender?, message: Message?, arguments: Array<out String>?) {
         if (message != null) {
-            if (arguments != null && arguments.isNotEmpty() && arguments[0].matches(Regex("\\w+@\\w+\\.\\w+"))) {
+            if (arguments != null && arguments.isNotEmpty() && arguments[0].matches(Regex(".+@.+\\..+"))) {
                 userService.updateUserEmail(message.chatId, arguments[0])
                 log.info("Update email")
                 val sendMessage = SendMessage()
