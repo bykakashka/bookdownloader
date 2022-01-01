@@ -31,7 +31,7 @@ class RegistrationCommand(private val userService: UserService) : IBotCommand {
             } else {
                 log.warn("Cannot update email = ${arguments?.let { it[0] }} for user ${message.chatId}")
                 val sendMessage = SendMessage()
-                sendMessage.text = "Invalid input"
+                sendMessage.text = "Invalid email address"
                 sendMessage.chatId = message.chatId.toString()
                 absSender?.execute(sendMessage)
             }
